@@ -125,6 +125,8 @@ endif(WITH_PETSC)
 
 if(WITH_UMFPACK)
 	find_package(UMFPACK REQUIRED)
+  find_package(AMD REQUIRED)
+  add_definitions(-DWITH_UMFPACK)
 endif(WITH_UMFPACK)
 
 if(WITH_PARDISO)
