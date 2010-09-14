@@ -121,7 +121,7 @@ bool FeProblem::is_up_to_date()
 
 //// matrix creation ///////////////////////////////////////////////////////////////////////////////
 
-void FeProblem::create(SparseMatrix* mat)
+void FeProblem::create(SparseMatrix* mat, Vector* rhs)
 {
   assert(mat != NULL);
 
@@ -181,6 +181,7 @@ void FeProblem::create(SparseMatrix* mat)
   delete [] blocks;
 
   mat->alloc();
+  if (rhs != NULL) rhs->alloc(ndof);
 
   // save space seq numbers and weakform seq number, so we can detect their changes
   for (int i = 0; i < wf->neq; i++)

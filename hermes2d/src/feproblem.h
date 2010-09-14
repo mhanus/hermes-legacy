@@ -61,7 +61,7 @@ public:
   Space* get_space(int n) {  return this->spaces[n];  }
   PrecalcShapeset* get_pss(int n) {  return this->pss[n];  }
 
-  void create(SparseMatrix *mat);
+  void create(SparseMatrix* mat, Vector* rhs = NULL);
   void assemble(Vector* init_vec, Matrix* mat_ext, Vector* rhs_ext,
                 bool rhsonly = false);
 
