@@ -1,12 +1,18 @@
 #
 # ScaLAPACK and BLACS
 #
+SET(MY_BLACS_LIB_DIRS $ENV{MY_BLACS_LIB_DIRS})
+SET(MY_SCALAPACK_LIB_DIRS $ENV{MY_SCALAPACK_LIB_DIRS})
 
-FIND_LIBRARY(SCALAPACK_LIBRARY  NAMES scalapack scalapack-pvm scalapack-mpi scalapack-mpich scalapack-mpich2 scalapack-openmpi scalapack-lam 
-                                PATHS /usr/lib64 /usr/lib /usr/local/lib64 /usr/local/lib)
+IF(NOT BLACS_LIB_DIRS)
+  SET(MY_BLACS_LIB_DIRS $ENV{SAGE_LOCAL}/lib)
+ENDIF(NOT MY_SCALAPACK_LIB_DIRS)
+IF(NOT MY_SCALAPACK_LIB_DIRS)
+  SET(MY_SCALAPACK_LIB_DIRS $ENV{SAGE_LOCAL}/lib)
+ENDIF(NOT MY_SCALAPACK_LIB_DIRS)
 
-FIND_LIBRARY(BLACS_LIBRARY      NAMES blacs blacs-pvm blacs-mpi blacs-mpich blacs-mpich2 blacs-openmpi blacs-lam 
-                                PATHS /usr/lib64 /usr/lib /usr/local/lib64 /usr/local/lib)
+FIND_LIBRARY(SCALAPACK_LIBRARY  NAMES scalapack scalapack-pvm scalapack-mpi scalapack-mpich scalapack-mpich2 scalapack-openmpi scalapack-lam PATHS ${MY_SCALAPACK_LIB_DIRS} NO_DEFAULT_PATH)
+FIND_LIBRARY(BLACS_LIBRARY      NAMES blacs blacs-pvm blacs-mpi blacs-mpich blacs-mpich2 blacs-openmpi blacs-lam PATHS ${MY_BLACS_LIB_DIRS} NO_DEFAULT_PATH)
 
 # Report the found libraries, quit with fatal error if any required library has not been found.
 INCLUDE(FindPackageHandleStandardArgs)

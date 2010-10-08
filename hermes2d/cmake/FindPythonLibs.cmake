@@ -1,7 +1,8 @@
-# PYTHON_VERSION = either empty, then it will determine the default systemwide
-# Python and use that version, or you specify it, then it will use that Python
-# version
+# PYTHON_VERSION = either empty, then the FEMHUB version will be used, or you 
+# specify it, then it will use Python of that version present on your system.
+#
 IF(NOT PYTHON_VERSION)
+    set(CMAKE_FIND_ROOT_PATH $ENV{SAGE_LOCAL}) # prepend $SAGE_LOCAL in front of all search paths
     execute_process(COMMAND python -c "import sys;print '%d.%d' % sys.version_info[:2]" OUTPUT_VARIABLE PYTHON_VERSION)
     string(STRIP ${PYTHON_VERSION} PYTHON_VERSION)
     set(PYTHON_VERSION ${PYTHON_VERSION} CACHE STRING "Systemwide Python version")

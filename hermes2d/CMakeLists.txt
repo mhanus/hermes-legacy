@@ -36,30 +36,17 @@ set(WITH_UTIL               YES)
 #
 set(WITH_UMFPACK            YES)
 set(WITH_TRILINOS           NO)
-
-# If PETSc is enabled, PETSC_ROOT and PETSC_ARCH must be set as well;
-# if PETSc is disabled, PETSC_ROOT and PETSC_ARCH will be ignored.
-#
 set(WITH_PETSC              NO)
-set(PETSC_ROOT              /opt/petsc/petsc-3.1-p4)
-set(PETSC_ARCH              petsc-arch-without-scalar-type)
 
-# Sequential version of MUMPS may be enabled by setting YES on the following line
-# and pointing to the package installation directory with MUMPS_ROOT. To enable the 
-# parallel version, setting WITH_MPI to YES in addition to that should suffice. If link
-# problems arise, it may be that the automatically found SCALAPACK libraries (reported
-# during the CMake configuration phase) do not match those used when compiling MUMPS.
-# In this case, set SCALAPACK_LIBRARIES manually in CMake.vars and reconfigure Hermes.
+# Setting yes here enables the sequential version of MUMPS. To enable the 
+# parallel version, set also WITH_MPI to YES.
 #
 set(WITH_MUMPS              NO)
-# set(MUMPS_ROOT            root/dir/of/mumps/)
-# set(SCALAPACK_LIBRARIES   -lscalapack -lblacs)
 
 # If PARDISO is enabled, WITH_OPENMP must be set as well (and perhaps some other libraries
 # added to ADDITIONAL_LIBS according to PARDISO user guide).
 #
 set(WITH_PARDISO            NO)
-set(PARDISO_LIB             /opt/pardiso/libpardiso400_GNU430_AMD_IA64.so)
 
 #
 # Parallel execution (tells the linker to use parallel versions of the selected solvers, if available):
@@ -68,13 +55,9 @@ set(PARDISO_LIB             /opt/pardiso/libpardiso400_GNU430_AMD_IA64.so)
 #  
 set(WITH_OPENMP             NO)
 
-# If MPI is enabled, the MPI library installed on the system should be found by 
-# CMake automatically. If the found library doesn't match the one used to compile the
-# particular MPI-dependent package, the other two options should be used to specify it.
+# Enable MPI for distributed processing.
 #
 set(WITH_MPI                NO)
-# set(MPI_LIBRARIES         -lmpi)
-# set(MPI_INCLUDE_PATH      /usr/include/openmpi
 
 
 # Additional data formats:
@@ -104,7 +87,7 @@ endif(EXISTS ${PROJECT_SOURCE_DIR}/CMake.vars)
 
 # Set overrides:
 if(WITH_PYTHON)
-	set(REPORT_RUNTIME_CONTROL YES) #reuired by python wrappers
+	set(REPORT_RUNTIME_CONTROL YES) #required by python wrappers
 endif(WITH_PYTHON)
 
 #
@@ -156,6 +139,8 @@ include_directories(${JUDY_INCLUDE_DIR})
 if(WITH_GLUT)
   find_package(GLUT REQUIRED)
   find_package(GLEW REQUIRED)
+  include_directories(${GLUT_INCLUDE_DIR})
+  include_directories(${GLEW_INCLUDE_DIR})  
 else(WITH_GLUT)
   add_definitions(-DNOGLUT)
 endif(WITH_GLUT)
@@ -201,8 +186,12 @@ endif(NOT MSVC)
 if(WITH_UMFPACK)
 	find_package(UMFPACK REQUIRED)
   include_directories(${UMFPACK_INCLUDE_DIR})
-  include_directories(${AMD_INCLUDE_DIR})
 endif(WITH_UMFPACK)
+
+if(WITH_TRILINOS OR WITH_PYTHON)
+	find_package(PythonLibs REQUIRED)
+  include_directories(${PYTHON_INCLUDE_PATH})  
+endif(WITH_TRILINOS OR WITH_PYTHON)
 
 if(WITH_TRILINOS)
 	find_package(TRILINOS REQUIRED)
@@ -219,9 +208,9 @@ endif(WITH_MUMPS)
 
 if(WITH_PETSC)
 	find_package(PETSC REQUIRED)
-	# For some header files, PETSc uses the same name for both real and complex versions (they only reside in 
-	# different directories), so we can't globally set the architecture-specific include directory here, but 
-	# rather on a per-target basis.
+	# Only a single configuration of PETSc is currently supported in Femhub (e.g. only
+	# real or only complex). All include files are put into same folder, pointed to by
+	# COMMON_PETSC_INCLUDE_DIRS.
 	include_directories(${COMMON_PETSC_INCLUDE_DIRS})
 endif(WITH_PETSC)
 
@@ -238,10 +227,9 @@ if(WITH_TESTS)
 endif(WITH_TESTS)
 
 if(WITH_PYTHON)
-	add_subdirectory(python)
-	find_package(PythonLibs REQUIRED)
+  add_subdirectory(python)
   find_package(NumPy REQUIRED)
-  include_directories(${PYTHON_INCLUDE_PATH} ${NUMPY_INCLUDE_PATH})
+  include_directories(${NUMPY_INCLUDE_PATH})
 endif(WITH_PYTHON)
 
 if(WITH_EXAMPLES)
