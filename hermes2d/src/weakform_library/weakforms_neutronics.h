@@ -59,6 +59,8 @@ namespace WeakFormsNeutronics
         typedef std::map<std::string, rank2> MaterialPropertyMap2;
         typedef std::map<std::string, rank3> MaterialPropertyMap3;
         
+        typedef std::map<std::string, std::string> RegionMaterialMap;
+        
         typedef std::vector<bool > bool1;
         typedef std::vector<std::vector<bool > > bool2;
         typedef std::vector<std::vector<std::vector<bool > > > bool3;
@@ -331,6 +333,8 @@ namespace WeakFormsNeutronics
             MaterialPropertyMap1 nuSigma_f;
             
             std::set<std::string> materials_list;
+            std::map<std::string, std::string> region_material_map;
+            
             unsigned int G;
             
             bool1 fission_nonzero_structure;
@@ -349,8 +353,10 @@ namespace WeakFormsNeutronics
             void fill_with(double c, MaterialPropertyMap1 *mrmg_map);
             void fill_with(double c, MaterialPropertyMap2 *mrmg_map);
                       
-            MaterialPropertyMaps(unsigned int G, std::set<std::string> mat_list = std::set<std::string>()) 
+            MaterialPropertyMaps(unsigned int G, const std::set<std::string>& mat_list = std::set<std::string>()) 
               : materials_list(mat_list), G(G)  { };
+              
+            MaterialPropertyMaps(unsigned int G, const RegionMaterialMap& reg_mat_map);
                         
             virtual void validate();
             
@@ -412,9 +418,13 @@ namespace WeakFormsNeutronics
               return this->materials_list;
             }
             
-            const rank1& get_Sigma_f(std::string material) const;
-            const rank1& get_nu(std::string material) const;
-            const rank1& get_chi(std::string material) const;
+            const rank1& get_Sigma_f_material(std::string material) const;
+            const rank1& get_nu_material(std::string material) const;
+            const rank1& get_chi_material(std::string material) const;
+            
+            const rank1& get_Sigma_f(std::string region) const;
+            const rank1& get_nu(std::string region) const;
+            const rank1& get_chi(std::string region) const;
             
             unsigned int get_G() const { return G; } 
             
@@ -443,9 +453,11 @@ namespace WeakFormsNeutronics
             
           public:
             
-            MaterialPropertyMaps(unsigned int G, std::set<std::string> mat_list = std::set<std::string>()) 
-            : Common::MaterialPropertyMaps(G, mat_list) { };
-                        
+            MaterialPropertyMaps(unsigned int G, const std::set<std::string>& mat_list = std::set<std::string>()) 
+              : Common::MaterialPropertyMaps(G, mat_list) { };
+            MaterialPropertyMaps(unsigned int G, const RegionMaterialMap& reg_mat_map)
+              : Common::MaterialPropertyMaps(G, reg_mat_map) { };
+            
             // We always need to supply chi, nu, Sigma_f, Sigma_r, Sigma_s and D to our neutronics weak forms. 
             // These parameters are often defined in terms of the other ones, or not specified at all and assumed 
             // to be zero for a particular simplified situation. This method, together with its complement in the
@@ -503,10 +515,15 @@ namespace WeakFormsNeutronics
               return this->scattering_nonzero_structure;
             }
             
-            const rank2& get_Sigma_s(std::string material) const;
-            const rank1& get_Sigma_r(std::string material) const;
-            const rank1& get_D(std::string material) const;
-            const rank1& get_src(std::string material) const;
+            const rank2& get_Sigma_s_material(std::string material) const;
+            const rank1& get_Sigma_r_material(std::string material) const;
+            const rank1& get_D_material(std::string material) const;
+            const rank1& get_src_material(std::string material) const;
+            
+            const rank2& get_Sigma_s(std::string region) const;
+            const rank1& get_Sigma_r(std::string region) const;
+            const rank1& get_D(std::string region) const;
+            const rank1& get_src(std::string region) const;
             
             friend std::ostream & operator<< (std::ostream& os, const MaterialPropertyMaps& matprop);
         };
@@ -521,11 +538,20 @@ namespace WeakFormsNeutronics
           public:
             
             TransportCorrectedMaterialPropertyMaps(unsigned int G, 
-                                                   const MaterialPropertyMap2& Ss_1);                                            
+                                                   const MaterialPropertyMap2& Ss_1,
+                                                   const RegionMaterialMap& reg_mat_map = RegionMaterialMap());                                            
             TransportCorrectedMaterialPropertyMaps(unsigned int G,
-                                                   const MaterialPropertyMap1& mu_av);
+                                                   const MaterialPropertyMap1& mu_av,
+                                                   const RegionMaterialMap& reg_mat_map = RegionMaterialMap());
             TransportCorrectedMaterialPropertyMaps(unsigned int G,
-                                                   const MaterialPropertyMap0& mu_av);                                                                              
+                                                   const MaterialPropertyMap0& mu_av,
+                                                   const RegionMaterialMap& reg_mat_map = RegionMaterialMap());                                                                              
+            TransportCorrectedMaterialPropertyMaps(unsigned int G,
+                                                   const RegionMaterialMap& reg_mat_map,
+                                                   const rank1& mu_av);
+            TransportCorrectedMaterialPropertyMaps(unsigned int G,
+                                                   const RegionMaterialMap& reg_mat_map,
+                                                   const rank0& mu_av);                                       
             TransportCorrectedMaterialPropertyMaps(unsigned int G,
                                                    std::set<std::string> mat_list,
                                                    const rank1& mu_av);
@@ -558,6 +584,25 @@ namespace WeakFormsNeutronics
           }
           
           operator std::map<std::string, NDArrayType>() {
+            return m_map;
+          }
+      };
+      
+      class region_material_map
+      {
+        private:
+          Definitions::RegionMaterialMap m_map;
+        public:
+          region_material_map(const std::string& key, const std::string& val) {
+            m_map[key] = val;
+          }
+          
+          region_material_map& operator()(const std::string& key, const std::string& val) {
+            m_map[key] = val;
+            return *this;
+          }
+          
+          operator Definitions::RegionMaterialMap() {
             return m_map;
           }
       };

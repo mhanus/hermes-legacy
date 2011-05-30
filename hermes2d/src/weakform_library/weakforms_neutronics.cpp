@@ -44,6 +44,14 @@ namespace WeakFormsNeutronics
     {
       namespace Common
       {
+        MaterialPropertyMaps::MaterialPropertyMaps(unsigned int G, const RegionMaterialMap& reg_mat_map)
+          : region_material_map(reg_mat_map), G(G)
+        {
+          RegionMaterialMap::const_iterator it = reg_mat_map.begin();
+          for ( ; it != reg_mat_map.end(); ++it)
+            materials_list.insert(it->second);
+        }
+
         void MaterialPropertyMaps::extend_to_multigroup(const MaterialPropertyMap0& mrsg_map, 
                                                         MaterialPropertyMap1 *mrmg_map)
         {
@@ -72,8 +80,6 @@ namespace WeakFormsNeutronics
         {
           if (materials_list.empty())
             error(E_MR_EXTENSION);
-          if (G == 1)
-            warning(W_MG_EXTENSION);
           
           std::set<std::string>::const_iterator it;
           for (it = materials_list.begin(); it != materials_list.end(); ++it)
@@ -252,7 +258,7 @@ namespace WeakFormsNeutronics
           }
         }
         
-        const rank1& MaterialPropertyMaps::get_Sigma_f(std::string material) const
+        const rank1& MaterialPropertyMaps::get_Sigma_f_material(std::string material) const
         {
           // Note that prop[e->elem_marker] cannot be used since 'prop' is a constant std::map for
           // which operator[] is undefined.
@@ -265,7 +271,7 @@ namespace WeakFormsNeutronics
             return *(new rank1()); // To avoid MSVC problems; execution should never come to this point.
           }
         }
-        const rank1& MaterialPropertyMaps::get_nu(std::string material) const
+        const rank1& MaterialPropertyMaps::get_nu_material(std::string material) const
         {
           MaterialPropertyMap1::const_iterator data = this->nu.find(material);
           if (data != this->nu.end())
@@ -276,7 +282,7 @@ namespace WeakFormsNeutronics
             return *(new rank1()); // To avoid MSVC problems; execution should never come to this point.
           }
         }
-        const rank1& MaterialPropertyMaps::get_chi(std::string material) const
+        const rank1& MaterialPropertyMaps::get_chi_material(std::string material) const
         {
           MaterialPropertyMap1::const_iterator data = this->chi.find(material);
           if (data != this->chi.end())
@@ -286,6 +292,29 @@ namespace WeakFormsNeutronics
             error(E_INVALID_MARKER);
             return *(new rank1()); // To avoid MSVC problems; execution should never come to this point.
           }
+        }
+        
+        const rank1& MaterialPropertyMaps::get_Sigma_f(std::string region) const
+        {
+          RegionMaterialMap::const_iterator material = this->region_material_map.find(region);
+          if (material != this->region_material_map.end())
+            return get_Sigma_f_material(material->second);
+          return get_Sigma_f_material(region); // There might be equivalence region <==> material, 
+                                               // in which case get_Sigma_f <==> get_Sigma_f_material.
+        }
+        const rank1& MaterialPropertyMaps::get_nu(std::string region) const
+        {
+          RegionMaterialMap::const_iterator material = this->region_material_map.find(region);
+          if (material != this->region_material_map.end())
+            return get_nu_material(material->second);
+          return get_nu_material(region);
+        }
+        const rank1& MaterialPropertyMaps::get_chi(std::string region) const
+        {
+          RegionMaterialMap::const_iterator material = this->region_material_map.find(region);
+          if (material != this->region_material_map.end())
+            return get_chi_material(material->second);
+          return get_chi_material(region);
         }
         
         std::ostream & operator<< (std::ostream& os, const MaterialPropertyMaps& matprop)
@@ -453,7 +482,7 @@ namespace WeakFormsNeutronics
           std::for_each(D.begin(), D.end(), ensure_size(G));
         }
         
-        const rank2& MaterialPropertyMaps::get_Sigma_s(std::string material) const
+        const rank2& MaterialPropertyMaps::get_Sigma_s_material(std::string material) const
         {
           // Note that prop[e->elem_marker] cannot be used since 'prop' is a constant std::map for
           // which operator[] is undefined.
@@ -466,7 +495,7 @@ namespace WeakFormsNeutronics
             return *(new rank2()); // To avoid MSVC problems; execution should never come to this point.
           }
         }
-        const rank1& MaterialPropertyMaps::get_Sigma_r(std::string material) const
+        const rank1& MaterialPropertyMaps::get_Sigma_r_material(std::string material) const
         {
           MaterialPropertyMap1::const_iterator data = this->Sigma_r.find(material);
           if (data != this->Sigma_r.end())
@@ -477,7 +506,7 @@ namespace WeakFormsNeutronics
             return *(new rank1()); // To avoid MSVC problems; execution should never come to this point.
           }
         }
-        const rank1& MaterialPropertyMaps::get_D(std::string material) const
+        const rank1& MaterialPropertyMaps::get_D_material(std::string material) const
         {
           MaterialPropertyMap1::const_iterator data = this->D.find(material);
           if (data != this->D.end())
@@ -488,7 +517,7 @@ namespace WeakFormsNeutronics
             return *(new rank1()); // To avoid MSVC problems; execution should never come to this point.
           }
         }
-        const rank1& MaterialPropertyMaps::get_src(std::string material) const
+        const rank1& MaterialPropertyMaps::get_src_material(std::string material) const
         {
           MaterialPropertyMap1::const_iterator data = this->src.find(material);
           if (data != this->src.end())
@@ -498,6 +527,35 @@ namespace WeakFormsNeutronics
             error(E_INVALID_MARKER);
             return *(new rank1()); // To avoid MSVC problems; execution should never come to this point.
           }
+        }
+        
+        const rank2& MaterialPropertyMaps::get_Sigma_s(std::string region) const
+        {
+          RegionMaterialMap::const_iterator material = this->region_material_map.find(region);
+          if (material != this->region_material_map.end())
+            return get_Sigma_s_material(material->second);
+          return get_Sigma_s_material(region);
+        }
+        const rank1& MaterialPropertyMaps::get_Sigma_r(std::string region) const
+        {
+          RegionMaterialMap::const_iterator material = this->region_material_map.find(region);
+          if (material != this->region_material_map.end())
+            return get_Sigma_r_material(material->second);
+          return get_Sigma_r_material(region);
+        }
+        const rank1& MaterialPropertyMaps::get_D(std::string region) const
+        {
+          RegionMaterialMap::const_iterator material = this->region_material_map.find(region);
+          if (material != this->region_material_map.end())
+            return get_D_material(material->second);
+          return get_D_material(region);
+        }
+        const rank1& MaterialPropertyMaps::get_src(std::string region) const
+        {
+          RegionMaterialMap::const_iterator material = this->region_material_map.find(region);
+          if (material != this->region_material_map.end())
+            return get_src_material(material->second);
+          return get_src_material(region);
         }
         
         std::ostream & operator<< (std::ostream& os, const MaterialPropertyMaps& matprop)
@@ -548,8 +606,9 @@ namespace WeakFormsNeutronics
         }
         
         TransportCorrectedMaterialPropertyMaps::TransportCorrectedMaterialPropertyMaps( unsigned int G, 
-                                                                                        const MaterialPropertyMap2& Ss_1 )
-          : MaterialPropertyMaps(G)
+                                                                                        const MaterialPropertyMap2& Ss_1,
+                                                                                        const RegionMaterialMap& reg_mat_map)
+          : MaterialPropertyMaps(G, reg_mat_map)
         {
           std::set<std::string> matlist;
           MaterialPropertyMap2::const_iterator it = Ss_1.begin();
@@ -562,8 +621,9 @@ namespace WeakFormsNeutronics
         }
         
         TransportCorrectedMaterialPropertyMaps::TransportCorrectedMaterialPropertyMaps( unsigned int G, 
-                                                                                        const MaterialPropertyMap1& mu_av )
-          : MaterialPropertyMaps(G)
+                                                                                        const MaterialPropertyMap1& mu_av,
+                                                                                        const RegionMaterialMap& reg_mat_map)
+          : MaterialPropertyMaps(G, reg_mat_map)
         {
           std::set<std::string> matlist;
           MaterialPropertyMap1::const_iterator it = mu_av.begin();
@@ -576,8 +636,9 @@ namespace WeakFormsNeutronics
         }
         
         TransportCorrectedMaterialPropertyMaps::TransportCorrectedMaterialPropertyMaps( unsigned int G, 
-                                                                                        const MaterialPropertyMap0& mu_av )
-          : MaterialPropertyMaps(G)
+                                                                                        const MaterialPropertyMap0& mu_av,
+                                                                                        const RegionMaterialMap& reg_mat_map)
+          : MaterialPropertyMaps(G, reg_mat_map)
         {
           std::set<std::string> matlist;
           MaterialPropertyMap0::const_iterator it = mu_av.begin();
@@ -587,6 +648,22 @@ namespace WeakFormsNeutronics
           set_materials_list(matlist);
           
           extend_to_multigroup(mu_av, &this->mu_av);
+        }
+        
+        TransportCorrectedMaterialPropertyMaps::TransportCorrectedMaterialPropertyMaps( unsigned int G,
+                                                                                        const RegionMaterialMap& reg_mat_map,
+                                                                                        const rank1& mu_av )
+          : MaterialPropertyMaps(G, reg_mat_map)
+        {
+          extend_to_multiregion(mu_av, &this->mu_av);
+        }
+        
+        TransportCorrectedMaterialPropertyMaps::TransportCorrectedMaterialPropertyMaps( unsigned int G,
+                                                                                        const RegionMaterialMap& reg_mat_map,
+                                                                                        const rank0& mu_av )
+          : MaterialPropertyMaps(G, reg_mat_map)
+        {
+          extend_to_multiregion_multigroup(mu_av, &this->mu_av);
         }
 
         TransportCorrectedMaterialPropertyMaps::TransportCorrectedMaterialPropertyMaps( unsigned int G,
