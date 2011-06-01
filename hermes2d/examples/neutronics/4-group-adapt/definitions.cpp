@@ -161,8 +161,8 @@ int power_iteration(const Hermes2D& hermes2d, const MaterialPropertyMaps& matpro
 
     // Update fission sources.
     using WeakFormsNeutronics::Multigroup::SupportClasses::Common::SourceFilter;
-    SourceFilter new_source(new_solutions, &matprop, fission_region);
-    SourceFilter old_source(solutions, &matprop, fission_region);
+    SourceFilter new_source(new_solutions, matprop, fission_region);
+    SourceFilter old_source(solutions, matprop, fission_region);
 
     // Compute the eigenvalue for current iteration.
     double k_new = wf->get_keff() * (integrate(&new_source, fission_region) / integrate(&old_source, fission_region));
