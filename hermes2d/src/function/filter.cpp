@@ -29,6 +29,16 @@ Filter::Filter(Hermes::vector<MeshFunction*> solutions) : MeshFunction()
   this->init();
 }
 
+Filter::Filter(Hermes::vector<Solution*> solutions) : MeshFunction()
+{
+  this->num = solutions.size();
+  if(num > 10)
+    error("Attempt to create an instance of Filter with more than 10 MeshFunctions.");
+  for(int i = 0; i < this->num; i++)
+    this->sln[i] = solutions.at(i);
+  this->init();
+}
+
 void Filter::init(Hermes::vector<MeshFunction*> solutions)
 {
 	this->num = solutions.size();
@@ -309,6 +319,11 @@ scalar SimpleFilter::get_pt_value(double x, double y, int it)
 
 
 DXDYFilter::DXDYFilter(Hermes::vector<MeshFunction*> solutions) : Filter(solutions)
+{
+  init_components();
+}
+
+DXDYFilter::DXDYFilter(Hermes::vector<Solution*> solutions) : Filter(solutions)
 {
   init_components();
 }

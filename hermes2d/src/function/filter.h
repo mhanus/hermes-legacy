@@ -34,6 +34,7 @@ public:
   Filter() {};
 
   Filter(Hermes::vector<MeshFunction*> solutions);
+  Filter(Hermes::vector<Solution*> solutions);
   virtual ~Filter();
 
   void init(Hermes::vector<MeshFunction*> solutions);
@@ -119,6 +120,7 @@ public:
   // one result (rslt), all inputs and result including derivatives
   DXDYFilter() {};
   DXDYFilter(Hermes::vector<MeshFunction*> solutions);
+  DXDYFilter(Hermes::vector<Solution*> solutions);
 
   void init(Hermes::vector<MeshFunction*> solutions);
 
