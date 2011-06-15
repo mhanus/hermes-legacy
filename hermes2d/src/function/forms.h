@@ -63,6 +63,8 @@ public:
   bool operator>(double d) { return false; }
   bool operator<(const Ord &o) { return this->order < o.order; }
   bool operator>(const Ord &o) { return this->order > o.order; }
+  
+  friend std::ostream & operator<< (std::ostream& os, const Ord& ord) { return os << "order = " << ord.get_order() << std::endl; } 
 
 protected:
   int order;
