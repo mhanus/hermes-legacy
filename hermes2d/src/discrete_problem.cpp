@@ -4379,7 +4379,9 @@ bool Hermes2D::solve_newton(scalar* coeff_vec, DiscreteProblem* dp, Solver* solv
     if (residual_as_function) solutions.push_back(new Solution());
     dir_lift_false.push_back(false);      // No Dirichlet lifts will be considered.
   }
-
+  //FILE *fp = fopen("data.m", "wt");
+  char A[32], b[32], x[32];
+  
   // The Newton's loop.
   double residual_norm;
   int it = 1;
@@ -4435,13 +4437,28 @@ bool Hermes2D::solve_newton(scalar* coeff_vec, DiscreteProblem* dp, Solver* solv
     // Multiply the residual vector with -1 since the matrix
     // equation reads J(Y^n) \deltaY^{n+1} = -F(Y^n).
     rhs->change_sign();
+/*    
+    UMFPackMatrix *mm = static_cast<UMFPackMatrix*>(matrix);
+    UMFPackVector *mv = static_cast<UMFPackVector*>(rhs);
 
+    sprintf(A, "A%d", it);
+    sprintf(b, "b%d", it);
+    sprintf(x, "x%d", it);
+    mm->dump(fp, A);
+    mv->dump(fp, b);
+    fprintf(fp, "\n%s = [", x);
+*/
     // Solve the linear system.
     if(!solver->solve()) error ("Matrix solver failed.\n");
 
     // Add \deltaY^{n+1} to Y^n.
-    for (int i = 0; i < ndof; i++) coeff_vec[i] += damping_coeff * solver->get_solution()[i];
-
+    for (int i = 0; i < ndof; i++) {
+//      fprintf(fp, "\n\t%g", solver->get_solution()[i]);
+      coeff_vec[i] += damping_coeff * solver->get_solution()[i];
+    }
+    
+//    fprintf(fp, "\n];\n %%--------------------------------------------------- \n\n");
+    
     it++;
   }
 
@@ -4452,6 +4469,8 @@ bool Hermes2D::solve_newton(scalar* coeff_vec, DiscreteProblem* dp, Solver* solv
     if (verbose) info("Maximum allowed number of Newton iterations exceeded, returning false.");
     return false;
   }
+
+//  fclose(fp);
 
   return true;
 }
