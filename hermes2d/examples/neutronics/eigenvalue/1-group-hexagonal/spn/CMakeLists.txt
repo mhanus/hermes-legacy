@@ -1,4 +1,4 @@
-project(1-group-hexagonal)
+project(1-group-hexagonal-spn)
 
 add_executable(${PROJECT_NAME} main.cpp definitions.cpp)
 include (${hermes2d_SOURCE_DIR}/CMake.common)
