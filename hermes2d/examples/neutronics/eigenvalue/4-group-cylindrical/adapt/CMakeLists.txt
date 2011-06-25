@@ -1,8 +1,8 @@
 if(NOT H2D_REAL)
-    return()
+	return()
 endif(NOT H2D_REAL)
 
-project(4-group)
+project(4-group-cylindrical-adapt)
 
 add_executable(${PROJECT_NAME} main.cpp definitions.cpp)
 include (${hermes2d_SOURCE_DIR}/CMake.common)

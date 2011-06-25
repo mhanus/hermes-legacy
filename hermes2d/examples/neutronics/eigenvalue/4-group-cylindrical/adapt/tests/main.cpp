@@ -1,43 +1,15 @@
 #define HERMES_REPORT_ALL
-#include "definitions.h"
-#include "problem_data.h"
+#include "../definitions.h"
+#include "../../problem_data.h"
+#include "../../weak_formulation.h"
 
 using namespace RefinementSelectors;
+using namespace WeakFormsNeutronics::Multigroup;
 
-// This example uses automatic adaptivity to solve a 4-group neutron diffusion equation in the reactor core.
-// The eigenproblem is solved using power interations.
-//
-// The reactor neutronics in a general coordinate system is given by the following eigenproblem:
-//
-//  - \nabla \cdot D_g \nabla \phi_g + \Sigma_{Rg}\phi_g - \sum_{g' \neq g} \Sigma_s^{g'\to g} \phi_{g'} =
-//  = \frac{\chi_g}{k_{eff}} \sum_{g'} \nu_{g'} \Sigma_{fg'}\phi_{g'}
-//
-// where 1/k_{eff} is eigenvalue and \phi_g, g = 1,...,4 are eigenvectors (neutron fluxes). The current problem
-// is posed in a 3D cylindrical axisymmetric geometry, leading to a 2D problem with r-z as the independent spatial
-// coordinates. Identifying r = x, z = y, the gradient in the weak form has the same components as in the
-// x-y system, while all integrands are multiplied by 2\pi x (determinant of the transformation matrix).
-//
-// BC:
-//
-// homogeneous neumann on symmetry axis
-// d D_g\phi_g / d n = - 0.5 \phi_g   elsewhere
-//
-// The eigenproblem is numerically solved using common technique known as the power method (power iterations):
-//
-//  1) Make an initial estimate of \phi_g and k_{eff}
-//  2) For n = 1, 2,...
-//         solve for \phi_g using previous k_prev
-//         solve for new k_{eff}
-//                                \int_{Active Core} \sum^4_{g = 1} \nu_{g} \Sigma_{fg}\phi_{g}_{new}
-//               k_new =  k_prev -------------------------------------------------------------------------
-//                                \int_{Active Core} \sum^4_{g = 1} \nu_{g} \Sigma_{fg}\phi_{g}_{prev}
-//  3) Stop iterations when
-//
-//     |   k_new - k_prev  |
-//     | ----------------- |  < epsilon
-//     |       k_new       |
-//
-//  Author: Milan Hanus (University of West Bohemia, Pilsen, Czech Republic).
+// This test makes sure that the example "neutronics/4-group-adapt" works correctly.
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 const int INIT_REF_NUM[N_GROUPS] = {     // Initial uniform mesh refinement for the individual solution components.
   1, 1, 1, 1                             
@@ -79,15 +51,107 @@ MatrixSolverType matrix_solver = SOLVER_UMFPACK;  // Possibilities: SOLVER_AMESO
                                                   
 // Power iteration control.
 
+bool project_initial_solution = false;
+
 double k_eff = 1.0;         // Initial eigenvalue approximation.
 double TOL_PIT_CM = 5e-5;   // Tolerance for eigenvalue convergence on the coarse mesh.
 double TOL_PIT_RM = 5e-6;   // Tolerance for eigenvalue convergence on the fine mesh.
 
-// Macros for simpler reporting (four group case).
-#define report_num_dofs(spaces) Space::get_num_dofs(spaces[0]), Space::get_num_dofs(spaces[1]),\
-                                Space::get_num_dofs(spaces[2]), Space::get_num_dofs(spaces[3]),\
-                                Space::get_num_dofs(spaces)
-#define report_errors(errors) errors[0],errors[1],errors[2],errors[3]
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/** General testing class. It can test
+ *   > if the computed and expected results agree to within a specified tolerance (allowed_delta),
+ *   > if the computed results do not overshoot the expected results by more than allowed_delta,
+ *   > if the computed results do not undershoot the expected results by more than allowed_delta.
+ * When, for the first time, the expected behavior is not achieved, 'passed' is set to false and nothing more is tested.
+ * If used with a user-defined type, its class must overload all operators appearing in the intended test method.
+**/
+template<typename T>
+struct TestSubject
+{
+  T allowed_delta;
+  bool passed;
+  
+  TestSubject(T allowed_delta) : allowed_delta(allowed_delta), passed(true) {};
+  
+  void test_equality(const T& computed, const T& expected) { 
+    if(passed) passed = (computed <= expected + allowed_delta && computed >= expected - allowed_delta);
+  }
+  void test_overshoot(const T& computed, const T& expected) { 
+    if(passed) passed = (computed <= expected + allowed_delta);
+  }
+  void test_undershoot(const T& computed, const T& expected) { 
+    if(passed) passed = (computed >= expected - allowed_delta);
+  }
+};
+
+/// Structure that contains information about an extremum. It will be used
+/// for testing the equality of computed and expected maxima, therefore it
+/// overloads operators +,-,>=,<=..
+struct Extremum
+{
+  double val, x, y;
+  
+  Extremum() : val(0.0), x(0.0), y(0.0) {};
+  Extremum(double val, double x, double y) : val(val), x(x), y(y) {};
+  
+  Extremum operator+ (const Extremum &ex) const {
+    return Extremum(val + ex.val, x + ex.x, y + ex.y);
+  }
+  Extremum operator- (const Extremum &ex) const {
+    return Extremum(val - ex.val, x - ex.x, y - ex.y);
+  }
+  bool operator>= (const Extremum &ex) const {
+    return (val >= ex.val && x >= ex.x && y >= ex.y);
+  }
+  bool operator<= (const Extremum &ex) const {
+    return (val <= ex.val && x <= ex.x && y <= ex.y);
+  }
+  
+  std::string str() { 
+    char ret[50];
+    sprintf(ret, "%lf, at (%lf,%lf)", val, x, y);
+    return std::string(ret);
+  }
+};
+
+/// Calculates maximum of a given function, including its coordinates.
+Extremum get_peak(MeshFunction *sln)
+{
+  Quad2D* quad = &g_quad_2d_std;
+  sln->set_quad_2d(quad);
+  Element* e;
+  Mesh* mesh = sln->get_mesh();
+  
+  scalar peak = 0.0;
+  double pos_x = 0.0;
+  double pos_y = 0.0;
+  
+  for_all_active_elements(e, mesh)
+  {
+    update_limit_table(e->get_mode());
+    sln->set_active_element(e);
+    RefMap* ru = sln->get_refmap();
+    int o = sln->get_fn_order() + ru->get_inv_ref_order();
+    limit_order(o);
+    sln->set_quad_order(o, H2D_FN_VAL);
+    scalar *uval = sln->get_fn_values();
+    int np = quad->get_num_points(o);
+    double* x = ru->get_phys_x(o);
+    double* y = ru->get_phys_y(o);
+    
+    for (int i = 0; i < np; i++)
+      if (uval[i] > peak) {
+        peak = uval[i];
+        pos_x = x[i];
+        pos_y = y[i];
+      }
+  }
+ 
+  return Extremum(peak, pos_x, pos_y);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char* argv[])
 {
@@ -110,7 +174,7 @@ int main(int argc, char* argv[])
   matprop.validate();
   
   std::cout << matprop;
-
+  
   // Use multimesh, i.e. create one mesh for each energy group.
   Hermes::vector<Mesh *> meshes;
   for (unsigned int g = 0; g < matprop.get_G(); g++) 
@@ -118,8 +182,8 @@ int main(int argc, char* argv[])
   
   // Load the mesh for the 1st group.
   H2DReader mloader;
-  mloader.load(mesh_file.c_str(), meshes[0]);
- 
+  mloader.load((std::string("../../") + mesh_file).c_str(), meshes[0]);
+  
   for (unsigned int g = 1; g < matprop.get_G(); g++) 
   {
     // Obtain meshes for the 2nd to 4th group by cloning the mesh loaded for the 1st group.
@@ -133,7 +197,7 @@ int main(int argc, char* argv[])
   
   // Create pointers to solutions on coarse and fine meshes and from the latest power iteration, respectively.
   Hermes::vector<Solution*> coarse_solutions, fine_solutions, power_iterates;
-
+  
   // Initialize all the new solution variables.
   for (unsigned int g = 0; g < matprop.get_G(); g++) 
   {
@@ -146,74 +210,7 @@ int main(int argc, char* argv[])
   Hermes::vector<Space *> spaces;
   for (unsigned int g = 0; g < matprop.get_G(); g++) 
     spaces.push_back(new H1Space(meshes[g], P_INIT[g]));
-
-  // Initialize the weak formulation.
-  CustomWeakForm wf(matprop, power_iterates, k_eff, bdy_vacuum);
-    
-  // Initialize the discrete algebraic representation of the problem and its solver.
-  //
-  // Create the matrix and right-hand side vector for the solver.
-  SparseMatrix* mat = create_matrix(matrix_solver);
-  Vector* rhs = create_vector(matrix_solver);
-  // Instantiate the solver itself.
-  Solver* solver = create_linear_solver(matrix_solver, mat, rhs);
-
-  // Initialize views.
-  /* for 1280x800 display */
-  ScalarView view1("Neutron flux 1", new WinGeom(0, 0, 320, 400));
-  ScalarView view2("Neutron flux 2", new WinGeom(330, 0, 320, 400));
-  ScalarView view3("Neutron flux 3", new WinGeom(660, 0, 320, 400));
-  ScalarView view4("Neutron flux 4", new WinGeom(990, 0, 320, 400));
-  OrderView oview1("Mesh for group 1", new WinGeom(0, 450, 320, 500));
-  OrderView oview2("Mesh for group 2", new WinGeom(330, 450, 320, 500));
-  OrderView oview3("Mesh for group 3", new WinGeom(660, 450, 320, 500));
-  OrderView oview4("Mesh for group 4", new WinGeom(990, 450, 320, 500));
-
-  /* for adjacent 1280x800 and 1680x1050 displays
-  ScalarView view1("Neutron flux 1", new WinGeom(0, 0, 640, 480));
-  ScalarView view2("Neutron flux 2", new WinGeom(650, 0, 640, 480));
-  ScalarView view3("Neutron flux 3", new WinGeom(1300, 0, 640, 480));
-  ScalarView view4("Neutron flux 4", new WinGeom(1950, 0, 640, 480));
-  OrderView oview1("Mesh for group 1", new WinGeom(1300, 500, 340, 500));
-  OrderView oview2("Mesh for group 2", new WinGeom(1650, 500, 340, 500));
-  OrderView oview3("Mesh for group 3", new WinGeom(2000, 500, 340, 500));
-  OrderView oview4("Mesh for group 4", new WinGeom(2350, 500, 340, 500));
-  */
-
-  Hermes::vector<ScalarView *> sviews(&view1, &view2, &view3, &view4);
-  Hermes::vector<OrderView *> oviews(&oview1, &oview2, &oview3, &oview4); 
-  for (unsigned int g = 0; g < matprop.get_G(); g++) 
-  { 
-    sviews[g]->show_mesh(false);
-    sviews[g]->set_3d_mode(true);
-  }
   
-  // DOF and CPU convergence graphs
-  GnuplotGraph graph_dof("Error convergence", "NDOF", "log(error)");
-  graph_dof.add_row("H1 err. est. [%]", "r", "-", "o");
-  graph_dof.add_row("L2 err. est. [%]", "g", "-", "s");
-  graph_dof.add_row("Keff err. est. [milli-%]", "b", "-", "d");
-  graph_dof.set_log_y();
-  graph_dof.show_legend();
-  graph_dof.show_grid();
-
-  GnuplotGraph graph_dof_evol("Evolution of NDOF", "Adaptation step", "NDOF");
-  graph_dof_evol.add_row("group 1", "r", "-", "o");
-  graph_dof_evol.add_row("group 2", "g", "-", "x");
-  graph_dof_evol.add_row("group 3", "b", "-", "+");
-  graph_dof_evol.add_row("group 4", "m", "-", "*");
-  graph_dof_evol.set_log_y();
-  graph_dof_evol.set_legend_pos("bottom right");
-  graph_dof_evol.show_grid();
-
-  GnuplotGraph graph_cpu("Error convergence", "CPU time [s]", "log(error)");
-  graph_cpu.add_row("H1 err. est. [%]", "r", "-", "o");
-  graph_cpu.add_row("L2 err. est. [%]", "g", "-", "s");
-  graph_cpu.add_row("Keff err. est. [milli-%]", "b", "-", "d");
-  graph_cpu.set_log_y();
-  graph_cpu.show_legend();
-  graph_cpu.show_grid();
-
   // Initialize the refinement selectors.
   H1ProjBasedSelector selector(CAND_LIST, CONV_EXP, H2DRS_DEFAULT_ORDER);
   Hermes::vector<RefinementSelectors::Selector*> selectors;
@@ -235,12 +232,49 @@ int main(int argc, char* argv[])
     proj_norms_l2.push_back(HERMES_L2_NORM);
   }
   
+  // Initialize the eigenvalue iterator.
+  SupportClasses::SourceIteration si(NEUTRONICS_DIFFUSION, matprop, hermes2d, fission_regions, HERMES_AXISYM_Y);
+  
+  // Initialize the weak formulation.
+  CustomWeakForm wf(matprop, power_iterates, k_eff, bdy_vacuum);
+  
+  // Initialize the discrete algebraic representation of the problem on the coarse meshes.
+  DiscreteProblem dp(&wf, spaces);
+  
   // Initial power iteration to obtain a coarse estimate of the eigenvalue and the fission source.
-  info("Coarse mesh power iteration, %d + %d + %d + %d = %d ndof:", report_num_dofs(spaces));
-  power_iteration(hermes2d, matprop, spaces, &wf, power_iterates, core, TOL_PIT_CM, mat, rhs, solver);
+  report_num_dof("Coarse mesh power iteration, ", spaces);
+  si.eigenvalue_iteration(power_iterates, dp, TOL_PIT_CM, matrix_solver);
   
   // Adaptivity loop:
   int as = 1; bool done = false;
+  double l2_err_est = 0.0;
+  
+  // DOF and CPU convergence graphs
+  GnuplotGraph graph_dof("Error convergence", "NDOF", "log(error)");
+  graph_dof.add_row("H1 err. est. [%]", "r", "-", "o");
+  graph_dof.add_row("L2 err. est. [%]", "g", "-", "s");
+  graph_dof.add_row("Keff err. est. [milli-%]", "b", "-", "d");
+  graph_dof.set_log_y();
+  graph_dof.show_legend();
+  graph_dof.show_grid();
+  
+  GnuplotGraph graph_dof_evol("Evolution of NDOF", "Adaptation step", "NDOF");
+  graph_dof_evol.add_row("group 1", "r", "-", "o");
+  graph_dof_evol.add_row("group 2", "g", "-", "x");
+  graph_dof_evol.add_row("group 3", "b", "-", "+");
+  graph_dof_evol.add_row("group 4", "m", "-", "*");
+  graph_dof_evol.set_log_y();
+  graph_dof_evol.set_legend_pos("bottom right");
+  graph_dof_evol.show_grid();
+  
+  GnuplotGraph graph_cpu("Error convergence", "CPU time [s]", "log(error)");
+  graph_cpu.add_row("H1 err. est. [%]", "r", "-", "o");
+  graph_cpu.add_row("L2 err. est. [%]", "g", "-", "s");
+  graph_cpu.add_row("Keff err. est. [milli-%]", "b", "-", "d");
+  graph_cpu.set_log_y();
+  graph_cpu.show_legend();
+  graph_cpu.show_grid();
+  
   do 
   {
     info("---- Adaptivity step %d:", as);
@@ -263,23 +297,19 @@ int main(int argc, char* argv[])
     // PETSc assembling is currently slow for larger matrices, so we switch to 
     // UMFPACK when matrices of order >8000 start to appear.
     if (Space::get_num_dofs(ref_spaces) > 8000 && matrix_solver == SOLVER_PETSC)
-    {
-      // Delete the old solver.
-      delete mat;
-      delete rhs;
-      delete solver;
-      
-      // Create a new one.
       matrix_solver = SOLVER_UMFPACK;
-      mat = create_matrix(matrix_solver);
-      rhs = create_vector(matrix_solver);
-      solver = create_linear_solver(matrix_solver, mat, rhs);
-    }
 #endif    
 
+    if (project_initial_solution)
+    {
+      info("Projecting previous solutions onto new meshes.");
+      OGProjection::project_global(ref_spaces, projection_jacobian, projection_residual, power_iterates, matrix_solver);
+    }
+
     // Solve the fine mesh problem.
-    info("Fine mesh power iteration, %d + %d + %d + %d = %d ndof:", report_num_dofs(ref_spaces));
-    power_iteration(hermes2d, matprop, ref_spaces, &wf, power_iterates, core, TOL_PIT_RM, mat, rhs, solver);
+    DiscreteProblem dp_ref(&wf, ref_spaces);
+    report_num_dof("Fine mesh power iteration, ", ref_spaces);
+    si.eigenvalue_iteration(power_iterates, dp_ref, TOL_PIT_RM, matrix_solver);
     
     // Store the results.
     for (unsigned int g = 0; g < matprop.get_G(); g++) 
@@ -287,19 +317,6 @@ int main(int argc, char* argv[])
 
     info("Projecting fine mesh solutions on coarse meshes.");
     OGProjection::project_global(spaces, projection_jacobian, projection_residual, coarse_solutions, matrix_solver);
-
-    // Time measurement.
-    cpu_time.tick();
-
-    // View the coarse mesh solution and meshes.
-    for (unsigned int g = 0; g < matprop.get_G(); g++) 
-    { 
-      sviews[g]->show(coarse_solutions[g]); 
-      oviews[g]->show(spaces[g]);
-    }
-
-    // Skip visualization time.
-    cpu_time.tick(HERMES_SKIP);
 
     // Report the number of negative eigenfunction values.
     info("Num. of negative values: %d, %d, %d, %d",
@@ -319,20 +336,20 @@ int main(int argc, char* argv[])
     info("Calculating errors.");
     Hermes::vector<double> h1_group_errors, l2_group_errors;
     double h1_err_est = adapt_h1.calc_err_est(coarse_solutions, fine_solutions, &h1_group_errors) * 100;
-    double l2_err_est = adapt_l2.calc_err_est(coarse_solutions, fine_solutions, &l2_group_errors, false) * 100;
+    l2_err_est = adapt_l2.calc_err_est(coarse_solutions, fine_solutions, &l2_group_errors, false) * 100;
 
     // Time measurement.
     cpu_time.tick();
     double cta = cpu_time.accumulated();
     
     // Report results.
-    info("ndof_coarse: %d + %d + %d + %d = %d", report_num_dofs(spaces));
+    report_num_dof("Coarse ndof: ", spaces);
 
     // Millipercent eigenvalue error w.r.t. the reference value (see physical_parameters.cpp). 
     double keff_err = 1e5*fabs(wf.get_keff() - REF_K_EFF)/REF_K_EFF;
 
-    info("per-group err_est_coarse (H1): %g%%, %g%%, %g%%, %g%%", report_errors(h1_group_errors));
-    info("per-group err_est_coarse (L2): %g%%, %g%%, %g%%, %g%%", report_errors(l2_group_errors));
+    report_errors("per-group err_est_coarse (H1): ", h1_group_errors);
+    report_errors("per-group err_est_coarse (L2): ", l2_group_errors);
     info("total err_est_coarse (H1): %g%%", h1_err_est);
     info("total err_est_coarse (L2): %g%%", l2_err_est);
     info("k_eff err: %g milli-percent", keff_err);
@@ -377,24 +394,73 @@ int main(int argc, char* argv[])
     if (as >= MAX_ADAPT_NUM) done = true;
   }
   while(done == false);
-
   verbose("Total running time: %g s", cpu_time.accumulated());
   
-  for (unsigned int g = 0; g < matprop.get_G(); g++) 
-  {
-    delete spaces[g]; delete meshes[g];
-    delete coarse_solutions[g], delete fine_solutions[g]; delete power_iterates[g];
-  }
-  
-  delete mat;
-  delete rhs;
-  delete solver;
-
   graph_dof.save("conv_dof.gp");
   graph_cpu.save("conv_cpu.gp");
   graph_dof_evol.save("dof_evol.gp");
+  
+  int ndofs[N_GROUPS];
+  for (unsigned int g = 0; g < matprop.get_G(); g++) {
+    ndofs[g] = spaces[g]->get_num_dofs();
+    info("Number of DOFs for group %d: %d.", g+1, ndofs[g]);
+  }
+    
+  Extremum maxima[N_GROUPS];
+  for (unsigned int g = 0; g < matprop.get_G(); g++) { 
+    maxima[g] = get_peak(coarse_solutions[g]);
+    info("Peak flux in group %d: %s.", g+1, maxima[g].str().c_str());
+  }
 
-  // Wait for all views to be closed.
-  View::wait();
-  return 0;
+  for (unsigned int g = 0; g < matprop.get_G(); g++) 
+  {
+    delete meshes[g];
+    delete coarse_solutions[g], delete fine_solutions[g]; delete power_iterates[g];
+  }
+  
+  // Test the results.
+  
+  TestSubject<int> num_iter(2);
+  num_iter.test_overshoot(as, 10);
+  
+  TestSubject<double> eigenvalue(1e-5);
+  eigenvalue.test_equality(wf.get_keff(), 1.140910);
+  
+  TestSubject<double> error_estimate(1e-5);
+  error_estimate.test_overshoot(l2_err_est, 0.398144);
+
+  TestSubject<int> ndof(100);
+  const int expected_ndofs[N_GROUPS] = {
+    580, 419, 444, 434
+  };
+  for (unsigned int g = 0; g < matprop.get_G(); g++) 
+  {
+    ndof.test_overshoot(spaces[g]->get_num_dofs(), expected_ndofs[g]);
+    delete spaces[g];
+  }
+
+  TestSubject<Extremum> peak(Extremum(1e-3, 1e-3, 1e-3));
+  const Extremum expected_maxima[N_GROUPS] = {
+    Extremum(1.019493, 1.794896, 5.481176),
+    Extremum(2.275702, 1.897030, 5.438284),
+    Extremum(0.338603, 1.897030, 5.438284),
+    Extremum(4.609233, 1.110000, 5.438284)
+  };
+  for (unsigned int g = 0; g < matprop.get_G(); g++) peak.test_equality(maxima[g], expected_maxima[g]);
+  
+  if (ndof.passed && peak.passed && eigenvalue.passed && num_iter.passed && error_estimate.passed) 
+  {
+    printf("Success!\n");
+    return ERR_SUCCESS;
+  }
+  else 
+  {
+    printf("Failure!\n");
+    if (!ndof.passed) printf("NDOF test failed.\n");
+    if (!peak.passed) printf("Peak flux test failed.\n");
+    if (!eigenvalue.passed) printf("Eigenvalue test failed.\n");
+    if (!num_iter.passed) printf("Number of iterations test failed.\n");
+    if (!error_estimate.passed) printf("Error estimate test failed.\n");
+    return ERR_FAILURE;
+  }
 }

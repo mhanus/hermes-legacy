@@ -4,17 +4,9 @@
 
 using namespace WeakFormsNeutronics::Multigroup::CompleteWeakForms::Diffusion;
 
-class CustomWeakForm : public DefaultWeakFormSourceIteration
-{
-  public:
-    CustomWeakForm(const MaterialPropertyMaps& matprop,
-                   Hermes::vector<Solution*>& iterates,
-                   double init_keff, std::string bdy_vacuum);
-};
-
-// Integral over the active core.
-double integrate(MeshFunction* sln, Mesh* mesh, std::string area);
 int get_num_of_neg(MeshFunction *sln);
+void report_num_dof(const std::string& msg, const Hermes::vector<Space *> spaces);
+void report_errors(const std::string& msg, const Hermes::vector< double > errors);
 
 // Jacobian matrix (same as stiffness matrix since projections are linear).
 class H1AxisymProjectionJacobian : public WeakForm::MatrixFormVol
@@ -122,26 +114,3 @@ private:
     return result;
   }  
 };
-
-/// \brief Power iteration. 
-///
-/// Starts from an initial guess stored in the argument 'solutions' and updates it by the final result after the iteration
-/// has converged, also updating the global eigenvalue 'k_eff'.
-///
-/// \param[in]     hermes2d   Class encapsulating global Hermes2D functions.
-/// \param[in]     spaces     Pointers to spaces on which the solutions are defined (one space for each energy group).
-/// \param[in]     wf         Pointer to the weak form of the problem.
-/// \param[in,out] solution   A set of Solution* pointers to solution components (neutron fluxes in each group). 
-///                           Initial guess for the iteration on input, converged result on output.
-/// \param[in] fission_region String specifiying the part of the solution domain where fission occurs.
-/// \param[in]     tol        Relative difference between two successive eigenvalue approximations that stops the iteration.
-/// \param[in,out] mat        Pointer to a matrix to which the system associated with the power iteration will be assembled.
-/// \param[in,out] rhs        Pointer to a vector to which the right hand sides of the power iteration will be successively assembled.
-/// \param[in]     solver     Solver for the resulting matrix problem (specified by \c mat and \c rhs).
-///
-/// \return  number of iterations needed for convergence within the specified tolerance.
-///
-int power_iteration(const Hermes2D& hermes2d, const MaterialPropertyMaps& matprop, 
-                    const Hermes::vector<Space *>& spaces, DefaultWeakFormSourceIteration* wf, 
-                    const Hermes::vector<Solution *>& solution, const std::string& fission_region, 
-                    double tol, SparseMatrix *mat, Vector* rhs, Solver *solver);

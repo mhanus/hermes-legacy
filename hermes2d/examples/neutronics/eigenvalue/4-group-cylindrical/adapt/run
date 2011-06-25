@@ -1,5 +1,5 @@
 rm *~ 
-./4-group-adapt
+./4-group-cylindrical-adapt
 
 if [ ! -d "res/$1" ]; then
 	mkdir "res/$1"

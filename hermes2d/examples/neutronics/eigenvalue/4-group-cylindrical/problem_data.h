@@ -1,6 +1,6 @@
 #include "hermes2d.h"
 
-using namespace WeakFormsNeutronics::Multigroup::MaterialProperties::Diffusion; 
+using namespace WeakFormsNeutronics::Multigroup::MaterialProperties::Definitions; 
 
 // Reference k_effective reactor eigenvalue for the material properties below
 // and geometry from the file 'reactor.mesh'. For this example, it was obtained
@@ -22,10 +22,11 @@ const std::string core = "core";
 const std::string bdy_vacuum = "vacuum boundary";
 const std::string bdy_symmetry = "symmetry plane";
 
+const Hermes::vector<std::string> fission_regions = Hermes::vector<std::string>("core");
+
 //////  Physical parameters.  /////////////////////////////////////////////////////////////////
 
-// Number of energy discretization intervals ('groups').
-const unsigned int N_GROUPS = 4;
+const int N_GROUPS = 4;
 
 const MaterialPropertyMap1 D = material_property_map<rank1>
 (
