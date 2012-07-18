@@ -2057,6 +2057,16 @@ namespace Hermes
       return HERMES_BOUNDARY_MARKERS_CONVERSION;
     }
 
+    const Mesh::ElementMarkersConversion &Mesh::get_element_markers_conversion() const
+    {
+      return element_markers_conversion;
+    }
+
+    const Mesh::BoundaryMarkersConversion &Mesh::get_boundary_markers_conversion() const
+    {
+      return boundary_markers_conversion;
+    }
+    
     Mesh::ElementMarkersConversion &Mesh::get_element_markers_conversion()
     {
       return element_markers_conversion;
@@ -2083,7 +2093,7 @@ namespace Hermes
       return;
     }
 
-    Mesh::MarkersConversion::StringValid Mesh::MarkersConversion::get_user_marker(int internal_marker)
+    Mesh::MarkersConversion::StringValid Mesh::MarkersConversion::get_user_marker(int internal_marker) const
     {
       if(internal_marker == H2D_DG_INNER_EDGE_INT)
         return StringValid(H2D_DG_INNER_EDGE, true);
@@ -2094,7 +2104,7 @@ namespace Hermes
       return StringValid(conversion_table.find(internal_marker)->second, true);
     }
 
-    Mesh::MarkersConversion::IntValid Mesh::MarkersConversion::get_internal_marker(std::string user_marker)
+    Mesh::MarkersConversion::IntValid Mesh::MarkersConversion::get_internal_marker(std::string user_marker) const
     {
       if(user_marker == H2D_DG_INNER_EDGE)
         return IntValid(H2D_DG_INNER_EDGE_INT, true);
