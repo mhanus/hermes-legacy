@@ -182,7 +182,10 @@ namespace Hermes
       /// external functions.
       void set_ext(MeshFunction<Scalar>* ext);
       void set_ext(Hermes::vector<MeshFunction<Scalar>*> ext);
+      void set_uExtOffset(int u_ext_offset);
       Hermes::vector<MeshFunction<Scalar>*> getExt();
+      /// scaling factor
+      void setScalingFactor(double scalingFactor);
       
       virtual ~Form() {};
 
@@ -213,8 +216,7 @@ namespace Hermes
 
       WeakForm<Scalar>* wf;
       double stage_time;
-      void setScalingFactor(double scalingFactor);
-      void set_uExtOffset(int u_ext_offset);
+
       friend class WeakForm<Scalar>;
       friend class RungeKutta<Scalar>;
       friend class DiscreteProblem<Scalar>;
